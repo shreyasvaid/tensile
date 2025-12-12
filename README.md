@@ -50,5 +50,6 @@ Ranked Risk Report + Explanations
 tensile analyze path/to/repo
 tensile report --top 20
 tensile explain src/btree.c
+```
 
 Note: Commands are implemented incrementally. See docs/spec.md for the authoritative design specification.

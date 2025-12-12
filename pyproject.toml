@@ -1,0 +1,31 @@
+[tool.poetry]
+name = "tensile"
+version = "0.1.0"
+description = "Graph-based risk analysis for large C codebases"
+authors = ["Your Name <you@example.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "tensile", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+typer = "^0.9.0"
+pandas = "^2.0.0"
+networkx = "^3.2"
+scikit-learn = "^1.4.0"
+
+# Added later when needed
+# tree-sitter = "^0.22.0"
+# catboost = "^1.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+black = "^24.0"
+ruff = "^0.3.0"
+
+[tool.poetry.scripts]
+tensile = "tensile.cli:app"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
