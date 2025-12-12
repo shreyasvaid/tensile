@@ -29,16 +29,16 @@ defect patterns.
 ---
 
 ## Architecture Overview
-Git Repository
-&darr;
-C Dependency Extraction
-&darr;
-Dependency Graph
-&darr;
-Graph Metrics + History + Code Signals
-&darr;
-Risk Model
-&darr;
+Git Repository<br>
+&darr;<br>
+C Dependency Extraction<br>
+&darr;<br>
+Dependency Graph<br>
+&darr;<br>
+Graph Metrics + History + Code Signals<br>
+&darr;<br>
+Risk Model<br>
+&darr;<br>
 Ranked Risk Report + Explanations
 
 
