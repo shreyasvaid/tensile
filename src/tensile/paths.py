@@ -30,6 +30,24 @@ class ArtifactPaths:
     @property
     def dataset_csv(self) -> Path:
         return self.cache_dir / "dataset.csv"
+    
+    @property
+    def labels_csv(self) -> Path:
+        return self.cache_dir / "labels.csv"
+
+    @property
+    def dataset_labeled_csv(self) -> Path:
+        return self.cache_dir / "dataset_labeled.csv"
+    
+    @property
+    def model_path(self) -> Path:
+        return self.cache_dir / "model.joblib"
+
+    @property
+    def eval_json(self) -> Path:
+        return self.cache_dir / "eval.json"
+
+
 
 
 

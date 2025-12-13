@@ -9,9 +9,10 @@ from tensile.graph.io import read_graph_json
 from tensile.history.git_mine import extract_file_history, GitHistoryConfig
 from tensile.features.code_stats import compute_code_stats
 from tensile.features.build_features import build_dataset
-
-
-
+from tensile.history.labels import build_bugfix_labels
+from tensile.risk.train import train_logreg, save_model
+from tensile.risk.evaluate import evaluate
+import pandas as pd
 
 app = typer.Typer(help="TENSILE: Graph-based risk analysis for large C codebases")
 
@@ -144,13 +145,90 @@ def build_features(repo: str, asof: str = typer.Option(..., help="As-of date YYY
     for r in top.itertuples(index=False):
         typer.echo(f"   - {r.file}")
 
+@app.command("label")
+def label(
+    repo: str,
+    asof: str = typer.Option(..., help="As-of date YYYY-MM-DD"),
+    horizon_days: int = typer.Option(180, help="Prediction horizon in days"),
+):
+    """Generate supervised labels from future bug-fix commits."""
+    repo_root = Path(repo).resolve()
+    if not repo_root.is_dir():
+        typer.echo(f"Error: repo path does not exist or is not a directory: {repo_root}")
+        raise typer.Exit(code=2)
 
+    ap = artifact_paths(Path.cwd())
+    if not ap.graph_json.exists():
+        typer.echo("Error: graph.json not found. Run `tensile build-graph <repo>` first.")
+        raise typer.Exit(code=2)
+
+    nodes, _, _ = read_graph_json(ap.graph_json)
+    df = build_bugfix_labels(repo_root, nodes, asof=asof, horizon_days=horizon_days)
+
+    ap.labels_csv.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(ap.labels_csv, index=False)
+
+    rate = df["y_bugfix_next"].mean() if len(df) else 0.0
+    typer.echo(f"✅ Wrote labels: {ap.labels_csv}")
+    typer.echo(f"   Positive rate: {rate:.3f} ({int(df['y_bugfix_next'].sum())}/{len(df)})")
+
+@app.command("join-labels")
+def join_labels():
+    """Join labels into dataset.csv -> dataset_labeled.csv."""
+    ap = artifact_paths(Path.cwd())
+
+    if not ap.dataset_csv.exists():
+        typer.echo("Error: dataset.csv not found. Run `tensile build-features <repo> --asof ...` first.")
+        raise typer.Exit(code=2)
+
+    if not ap.labels_csv.exists():
+        typer.echo("Error: labels.csv not found. Run `tensile label <repo> --asof ...` first.")
+        raise typer.Exit(code=2)
+
+    ds = pd.read_csv(ap.dataset_csv)
+    lab = pd.read_csv(ap.labels_csv)
+
+    out = ds.merge(lab, on="file", how="left")
+    out["y_bugfix_next"] = out["y_bugfix_next"].fillna(0).astype(int)
+
+    out.to_csv(ap.dataset_labeled_csv, index=False)
+    typer.echo(
+        f"✅ Wrote labeled dataset: {ap.dataset_labeled_csv} (rows={len(out)}, cols={len(out.columns)})"
+    )
+
+@app.command()
+def train():
+    """Train a baseline risk model on dataset_labeled.csv."""
+    ap = artifact_paths(Path.cwd())
+    if not ap.dataset_labeled_csv.exists():
+        typer.echo("Error: dataset_labeled.csv not found. Run `tensile join-labels` first.")
+        raise typer.Exit(code=2)
+
+    tr = train_logreg(ap.dataset_labeled_csv)
+    save_model(ap.model_path, tr.model, tr.feature_cols)
+    typer.echo(f"✅ Saved model: {ap.model_path}")
+    typer.echo(f"   Features: {len(tr.feature_cols)}")
+
+@app.command()
+def evaluate_model():
+    """Evaluate model and baselines (Precision@K, ROC-AUC)."""
+    ap = artifact_paths(Path.cwd())
+    if not ap.dataset_labeled_csv.exists() or not ap.model_path.exists():
+        typer.echo("Error: missing dataset_labeled.csv or model. Run `tensile train` first.")
+        raise typer.Exit(code=2)
+
+    res = evaluate(ap.dataset_labeled_csv, ap.model_path, ap.eval_json)
+    typer.echo(f"✅ Wrote eval: {ap.eval_json}")
+    typer.echo("   Precision@K (model):")
+    for k, v in res["model"]["precision_at_k"].items():
+        typer.echo(f"   - P@{k}: {v:.3f}")
+
+    typer.echo("   Baselines (P@20):")
+    for name, b in res["baselines"].items():
+        p20 = b["precision_at_k"].get("20", 0.0)
+        typer.echo(f"   - {name}: {p20:.3f}")
 
 # Stubs
-@app.command()
-def train(repo: str, asof: str = typer.Option(..., help="As-of date YYYY-MM-DD")):
-    raise NotImplementedError("TODO: implement train")
-
 @app.command()
 def report(repo: str, top: int = typer.Option(20, help="Show top K risky files")):
     raise NotImplementedError("TODO: implement report")
