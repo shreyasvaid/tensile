@@ -239,6 +239,16 @@ def report(top: int = typer.Option(20, help="Show top K risky files")):
         raise typer.Exit(code=2)
 
     ranked = rank_files(ap.dataset_labeled_csv, ap.model_path).head(top)
+    full = rank_files(ap.dataset_labeled_csv, ap.model_path)
+    total_pos = int(full["y_bugfix_next"].sum())
+    n = len(full)
+    hits = int(ranked["y_bugfix_next"].sum())
+
+    typer.echo(f"Top {top} risky files:")
+    typer.echo(f"Hit rate in top {top}: {hits}/{top} = {hits/top:.2f}")
+    typer.echo(f"Base rate: {total_pos}/{n} = {total_pos/n:.3f}")
+    typer.echo("")
+
 
     typer.echo(f"Top {top} risky files:")
     for i, r in enumerate(ranked.itertuples(index=False), start=1):
@@ -257,15 +267,43 @@ def explain(file: str, topn: int = typer.Option(8, help="Number of contributing 
 
     typer.echo(f"File: {ex.file}")
     typer.echo(f"Risk score: {ex.score:.4f}")
-    typer.echo("Top positive contributors:")
+    typer.echo("Top contributors (standardized):")
     for f, v in ex.top_positive:
         typer.echo(f"  + {f}: {v:.4f}")
     typer.echo("Top negative contributors:")
     for f, v in ex.top_negative:
         typer.echo(f"  - {f}: {v:.4f}")
 
+@app.command()
+def report(
+    top: int = typer.Option(20, help="Show top K risky files"),
+):
+    """Print top risky files (requires trained model and labeled dataset)."""
+    ap = artifact_paths(Path.cwd())
+    if not ap.dataset_labeled_csv.exists() or not ap.model_path.exists():
+        typer.echo("Error: missing dataset_labeled.csv or model. Run `tensile train` first.")
+        raise typer.Exit(code=2)
 
-# Stubs
+    full = rank_files(ap.dataset_labeled_csv, ap.model_path)
+    ranked = full.head(top)
+
+    total_pos = int(full["y_bugfix_next"].sum())
+    n = len(full)
+    hits = int(ranked["y_bugfix_next"].sum())
+
+    typer.echo(f"Top {top} risky files:")
+    typer.echo(f"Hit rate in top {top}: {hits}/{top} = {hits/top:.2f}")
+    typer.echo(f"Base rate: {total_pos}/{n} = {total_pos/n:.3f}")
+    lift = (hits / top) / (total_pos / n) if total_pos else 0.0
+    typer.echo(f"Lift vs base rate: {lift:.1f}x")
+    typer.echo("")
+
+    for i, r in enumerate(ranked.itertuples(index=False), start=1):
+        typer.echo(
+            f"{i:>2}. {r.file}  score={r.risk_score:.4f}  label={int(r.y_bugfix_next)}"
+        )
+
+    
 @app.command()
 def analyze(repo: str, asof: str = typer.Option(..., help="As-of date YYYY-MM-DD")):
     raise NotImplementedError("TODO: implement analyze")
