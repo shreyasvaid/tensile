@@ -79,7 +79,7 @@ Verify installation:
 poetry run tensile --help
 ```
 
-### QUICK START:
+## QUICK START:
 Analyze a C repository in one command:
 ```bash
 poetry run tensile analyze /path/to/repo --asof 2025-12-01
@@ -93,8 +93,8 @@ This will:
 
 Results are cached automatically for fast re-runs.
 
-### Core Commands
-analyze (Recommended Entry Point): Runs the full pipeline with caching.
+## Core Commands
+`analyze` (Recommended Entry Point): Runs the full pipeline with caching.
 ```bash
 poetry run tensile analyze /path/to/repo \
   --asof 2025-12-01 \
@@ -109,12 +109,12 @@ Options:
 - --out-md – write data/cache/report.md
 - --force – recompute all artifacts (ignore cache)
 
-report: Print the top-K risky files using cached artifacts.
+`report`: Print the top-K risky files using cached artifacts.
 ```bash
 poetry run tensile report --top 20 --out-md
 ```
 
-explain: Explain why a specific file is risky.
+`explain`: Explain why a specific file is risky.
 ```bash
 poetry run tensile explain src/alter.c
 ```
@@ -128,9 +128,10 @@ You typically don’t need these, but they are available:
 - join-labels
 - train
 - evaluate-model
+  
 These are useful for debugging or research workflows.
 
-### Output Artifacts
+## Output Artifacts
 All outputs are written to data/cache/
 
 Key files:
@@ -145,9 +146,9 @@ Key files:
 
 These artifacts are intentionally cached and should not be committed.
 
-### Common Pitfalls and Nuances
+## Common Pitfalls and Nuances
 
-# Cache Reuse
+### Cache Reuse
 If you change --asof or --horizon-days, use:
 
 ```bash
@@ -156,11 +157,11 @@ If you change --asof or --horizon-days, use:
 
 Otherwise cached artifacts will be reused.
 
-# Git History Cost
+### Git History Cost
 Initial runs may take several minutes on large repositories.
 Subsequent runs are fast (≈1–2 seconds) due to caching.
 
-# Label Noise
+### Label Noise
 
 Bug-fix labels are inferred from commit messages.
 They are heuristic, not perfect ground truth.
@@ -173,5 +174,24 @@ High risk does not mean bad code. Often it indicates:
 - Central dependency position
 - High change frequency
 - Complex ownership or interface role
+
+### Accuracy and Validation
+
+TENSILE evaluates itself using:
+- ROC-AUC
+- Precision@K
+- Baseline comparisons (recent churn, LOC, PageRank)
+  
+However, labels are heuristic, performance varies by time window, and as such, results should be interpreted comparatively.
+
+The tool is intended for prioritization, not blame.
+
+## Disclaimer [VERY IMPORTANT] 
+
+TENSILE provides probabilistic risk signals.
+It does not guarantee bugs, defects, or security issues.
+
+
+
 
 
