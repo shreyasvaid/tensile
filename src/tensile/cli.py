@@ -14,6 +14,9 @@ from tensile.risk.train import train_logreg, save_model
 from tensile.risk.evaluate import evaluate
 from tensile.risk.report import rank_files
 from tensile.risk.explain import explain_file
+from tensile.risk.report_md import write_report_md
+import json
+
 import pandas as pd
 
 app = typer.Typer(help="TENSILE: Graph-based risk analysis for large C codebases")
@@ -73,26 +76,19 @@ def build_graph(repo: str):
     for row in df.sort_values("g_pagerank", ascending=False).head(5).itertuples(index=False):
         typer.echo(f"   - {row.file}  (pagerank={row.g_pagerank:.6f})")
 
-
-@app.command("extract-history")
-def extract_history(
-    repo: str,
-    asof: str = typer.Option(..., help="As-of date YYYY-MM-DD"),
-    half_life_days: float = typer.Option(30.0, help="Half-life (days) for recency-weighted features"),
-):
-    """Extract git history features as of a date."""
-    repo_root = Path(repo).resolve()
-    if not repo_root.is_dir():
-        typer.echo(f"Error: repo path does not exist or is not a directory: {repo_root}")
-        raise typer.Exit(code=2)
-
+def _run_extract_history(repo_root: Path, asof: str, half_life_days: float) -> None:
     ap = artifact_paths(Path.cwd())
     if not ap.graph_json.exists():
         typer.echo("Error: graph.json not found. Run `tensile build-graph <repo>` first.")
         raise typer.Exit(code=2)
 
     nodes, _, _ = read_graph_json(ap.graph_json)
-    df = extract_file_history(repo_root, nodes, asof=asof, cfg=GitHistoryConfig(half_life_days=half_life_days))
+    df = extract_file_history(
+        repo_root,
+        nodes,
+        asof=asof,
+        cfg=GitHistoryConfig(half_life_days=half_life_days),
+    )
 
     ap.history_csv.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(ap.history_csv, index=False)
@@ -103,7 +99,27 @@ def extract_history(
     top = df.sort_values("h_recent_churn", ascending=False).head(5)
     typer.echo("   Top recent-churn files:")
     for r in top.itertuples(index=False):
-        typer.echo(f"   - {r.file} (recent_churn={r.h_recent_churn:.2f}, commits={r.h_commit_count})")
+        typer.echo(
+            f"   - {r.file} (recent_churn={r.h_recent_churn:.2f}, commits={r.h_commit_count})"
+        )
+
+
+@app.command("extract-history")
+def extract_history(
+    repo: str,
+    asof: str = typer.Option(..., help="As-of date YYYY-MM-DD"),
+    half_life_days: float = typer.Option(
+        30.0, help="Half-life (days) for recency-weighted features"
+    ),
+):
+    """Extract git history features as of a date."""
+    repo_root = Path(repo).resolve()
+    if not repo_root.is_dir():
+        typer.echo(f"Error: repo path does not exist or is not a directory: {repo_root}")
+        raise typer.Exit(code=2)
+
+    _run_extract_history(repo_root, asof=asof, half_life_days=half_life_days)
+
 
 @app.command("build-features")
 def build_features(repo: str, asof: str = typer.Option(..., help="As-of date YYYY-MM-DD")):
@@ -230,30 +246,6 @@ def evaluate_model():
         p20 = b["precision_at_k"].get("20", 0.0)
         typer.echo(f"   - {name}: {p20:.3f}")
 
-@app.command()
-def report(top: int = typer.Option(20, help="Show top K risky files")):
-    """Print top risky files (requires trained model and labeled dataset)."""
-    ap = artifact_paths(Path.cwd())
-    if not ap.dataset_labeled_csv.exists() or not ap.model_path.exists():
-        typer.echo("Error: missing dataset_labeled.csv or model. Run `tensile train` first.")
-        raise typer.Exit(code=2)
-
-    ranked = rank_files(ap.dataset_labeled_csv, ap.model_path).head(top)
-    full = rank_files(ap.dataset_labeled_csv, ap.model_path)
-    total_pos = int(full["y_bugfix_next"].sum())
-    n = len(full)
-    hits = int(ranked["y_bugfix_next"].sum())
-
-    typer.echo(f"Top {top} risky files:")
-    typer.echo(f"Hit rate in top {top}: {hits}/{top} = {hits/top:.2f}")
-    typer.echo(f"Base rate: {total_pos}/{n} = {total_pos/n:.3f}")
-    typer.echo("")
-
-
-    typer.echo(f"Top {top} risky files:")
-    for i, r in enumerate(ranked.itertuples(index=False), start=1):
-        typer.echo(f"{i:>2}. {r.file}  score={r.risk_score:.4f}  label={int(r.y_bugfix_next)}")
-
 
 @app.command()
 def explain(file: str, topn: int = typer.Option(8, help="Number of contributing features to show")):
@@ -277,12 +269,25 @@ def explain(file: str, topn: int = typer.Option(8, help="Number of contributing 
 @app.command()
 def report(
     top: int = typer.Option(20, help="Show top K risky files"),
+    out_md: bool = typer.Option(False, help="Write Markdown report to data/cache/report.md"),
+    repo: str = typer.Option("", help="Repository path (optional)"),
+    asof: str = typer.Option("", help="As-of date YYYY-MM-DD (optional)"),
+    horizon_days: int = typer.Option(0, help="Prediction horizon in days (optional)"),
+    quiet: bool = typer.Option(False, help="Suppress printing the ranked list (still writes report.md)"),
 ):
-    """Print top risky files (requires trained model and labeled dataset)."""
+    """Print top risky files and optionally write report.md."""
     ap = artifact_paths(Path.cwd())
     if not ap.dataset_labeled_csv.exists() or not ap.model_path.exists():
         typer.echo("Error: missing dataset_labeled.csv or model. Run `tensile train` first.")
         raise typer.Exit(code=2)
+
+    # 🔹 Auto-fill metadata from last analyze() run if not provided
+    run_meta_path = ap.cache_dir / "run_meta.json"
+    if run_meta_path.exists() and (not repo or not asof or horizon_days == 0):
+        saved = json.loads(run_meta_path.read_text(encoding="utf-8"))
+        repo = repo or saved.get("repo", "")
+        asof = asof or saved.get("asof", "")
+        horizon_days = horizon_days or int(saved.get("horizon_days", 0))
 
     full = rank_files(ap.dataset_labeled_csv, ap.model_path)
     ranked = full.head(top)
@@ -298,16 +303,105 @@ def report(
     typer.echo(f"Lift vs base rate: {lift:.1f}x")
     typer.echo("")
 
-    for i, r in enumerate(ranked.itertuples(index=False), start=1):
-        typer.echo(
-            f"{i:>2}. {r.file}  score={r.risk_score:.4f}  label={int(r.y_bugfix_next)}"
-        )
+    if not quiet:
+        for i, r in enumerate(ranked.itertuples(index=False), start=1):
+            typer.echo(
+                f"{i:>2}. {r.file}  score={r.risk_score:.4f}  label={int(r.y_bugfix_next)}"
+            )
 
-    
+    if out_md:
+        meta = {
+            "repo": repo,
+            "asof": asof,
+            "horizon_days": horizon_days,
+            "n_files": n,
+            "n_pos": total_pos,
+            "positive_rate": total_pos / n if n else 0.0,
+            "hits": hits,
+            "hit_rate": hits / top if top else 0.0,
+            "lift": lift,
+        }
+        write_report_md(ap.report_md, full, ap.eval_json, meta, top=top)
+        typer.echo(f"📝 Wrote report: {ap.report_md}")
+
+
 @app.command()
-def analyze(repo: str, asof: str = typer.Option(..., help="As-of date YYYY-MM-DD")):
-    raise NotImplementedError("TODO: implement analyze")
+def analyze(
+    repo: str,
+    asof: str = typer.Option(..., help="As-of date YYYY-MM-DD"),
+    horizon_days: int = typer.Option(180, help="Label horizon in days"),
+    top: int = typer.Option(20, help="Top-K for report"),
+    out_md: bool = typer.Option(True, help="Write report.md"),
+    force: bool = typer.Option(False, help="Recompute all artifacts"),
+    half_life_days: float = typer.Option(30.0, help="Half-life for git recency features"),
+):
+    repo_root = Path(repo).resolve()
+    if not repo_root.is_dir():
+        typer.echo(f"Error: repo path does not exist or is not a directory: {repo_root}")
+        raise typer.Exit(code=2)
 
+    ap = artifact_paths(Path.cwd())
+
+    # 1) Graph
+    if force or not ap.graph_json.exists():
+        build_graph(str(repo_root))
+    else:
+        typer.echo(f"↪ Using cached graph: {ap.graph_json}")
+
+    # 2) History (SLOW — biggest win)
+    if force or not ap.history_csv.exists():
+        _run_extract_history(repo_root, asof=asof, half_life_days=half_life_days)
+    else:
+        typer.echo(f"↪ Using cached history: {ap.history_csv}")
+
+    # 3) Code features
+    if force or not ap.code_stats_csv.exists() or not ap.dataset_csv.exists():
+        build_features(str(repo_root), asof=asof)
+    else:
+        typer.echo(f"↪ Using cached features: {ap.dataset_csv}")
+
+    # 4) Labels
+    if force or not ap.labels_csv.exists():
+        label(str(repo_root), asof=asof, horizon_days=horizon_days)
+    else:
+        typer.echo(f"↪ Using cached labels: {ap.labels_csv}")
+
+    if force or not ap.dataset_labeled_csv.exists():
+        join_labels()
+    else:
+        typer.echo(f"↪ Using cached labeled dataset: {ap.dataset_labeled_csv}")
+
+    # 5) Train
+    if force or not ap.model_path.exists():
+        train()
+    else:
+        typer.echo(f"↪ Using cached model: {ap.model_path}")
+
+    # 6) Eval
+    if force or not ap.eval_json.exists():
+        evaluate_model()
+    else:
+        typer.echo(f"↪ Using cached eval: {ap.eval_json}")
+
+    (ap.cache_dir).mkdir(parents=True, exist_ok=True)
+    ap.run_meta_json.write_text(
+        json.dumps(
+            {"repo": str(repo_root), "asof": asof, "horizon_days": horizon_days},
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+    # 7) Report
+    report(
+        top=top,
+        out_md=out_md,
+        repo=str(repo_root),
+        asof=asof,
+        horizon_days=horizon_days,
+        quiet=True,
+    )
 
 if __name__ == "__main__":
     app()

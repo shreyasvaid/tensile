@@ -50,6 +50,11 @@ class ArtifactPaths:
     @property
     def report_md(self) -> Path:
         return self.cache_dir / "report.md"
+    
+    @property
+    def run_meta_json(self) -> Path:
+        return self.cache_dir / "run_meta.json"
+
 
 
 
