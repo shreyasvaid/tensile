@@ -46,6 +46,11 @@ class ArtifactPaths:
     @property
     def eval_json(self) -> Path:
         return self.cache_dir / "eval.json"
+    
+    @property
+    def report_md(self) -> Path:
+        return self.cache_dir / "report.md"
+
 
 
 

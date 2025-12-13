@@ -12,6 +12,8 @@ from tensile.features.build_features import build_dataset
 from tensile.history.labels import build_bugfix_labels
 from tensile.risk.train import train_logreg, save_model
 from tensile.risk.evaluate import evaluate
+from tensile.risk.report import rank_files
+from tensile.risk.explain import explain_file
 import pandas as pd
 
 app = typer.Typer(help="TENSILE: Graph-based risk analysis for large C codebases")
@@ -228,15 +230,42 @@ def evaluate_model():
         p20 = b["precision_at_k"].get("20", 0.0)
         typer.echo(f"   - {name}: {p20:.3f}")
 
+@app.command()
+def report(top: int = typer.Option(20, help="Show top K risky files")):
+    """Print top risky files (requires trained model and labeled dataset)."""
+    ap = artifact_paths(Path.cwd())
+    if not ap.dataset_labeled_csv.exists() or not ap.model_path.exists():
+        typer.echo("Error: missing dataset_labeled.csv or model. Run `tensile train` first.")
+        raise typer.Exit(code=2)
+
+    ranked = rank_files(ap.dataset_labeled_csv, ap.model_path).head(top)
+
+    typer.echo(f"Top {top} risky files:")
+    for i, r in enumerate(ranked.itertuples(index=False), start=1):
+        typer.echo(f"{i:>2}. {r.file}  score={r.risk_score:.4f}  label={int(r.y_bugfix_next)}")
+
+
+@app.command()
+def explain(file: str, topn: int = typer.Option(8, help="Number of contributing features to show")):
+    """Explain why a file is risky using model contributions."""
+    ap = artifact_paths(Path.cwd())
+    if not ap.dataset_labeled_csv.exists() or not ap.model_path.exists():
+        typer.echo("Error: missing dataset_labeled.csv or model. Run `tensile train` first.")
+        raise typer.Exit(code=2)
+
+    ex = explain_file(ap.dataset_labeled_csv, ap.model_path, file=file, topn=topn)
+
+    typer.echo(f"File: {ex.file}")
+    typer.echo(f"Risk score: {ex.score:.4f}")
+    typer.echo("Top positive contributors:")
+    for f, v in ex.top_positive:
+        typer.echo(f"  + {f}: {v:.4f}")
+    typer.echo("Top negative contributors:")
+    for f, v in ex.top_negative:
+        typer.echo(f"  - {f}: {v:.4f}")
+
+
 # Stubs
-@app.command()
-def report(repo: str, top: int = typer.Option(20, help="Show top K risky files")):
-    raise NotImplementedError("TODO: implement report")
-
-@app.command()
-def explain(repo: str, file: str):
-    raise NotImplementedError("TODO: implement explain")
-
 @app.command()
 def analyze(repo: str, asof: str = typer.Option(..., help="As-of date YYYY-MM-DD")):
     raise NotImplementedError("TODO: implement analyze")
