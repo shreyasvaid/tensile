@@ -4,6 +4,11 @@ from pathlib import Path
 from tensile.paths import artifact_paths
 from tensile.graph.build_includes import build_includes_graph
 from tensile.graph.io import write_graph_json
+from tensile.graph.metrics import compute_file_metrics, write_metrics_csv, GraphMetricsConfig
+from tensile.graph.io import read_graph_json
+from tensile.history.git_mine import extract_file_history, GitHistoryConfig
+
+
 
 app = typer.Typer(help="TENSILE: Graph-based risk analysis for large C codebases")
 
@@ -41,10 +46,60 @@ def build_graph(repo: str):
         f"   Includes: {meta['include_directives_total']}, Unresolved: {meta['unresolved_includes_total']}"
     )
 
-# Keep the rest of your stubs below (unchanged for now)
-@app.command()
-def extract_history(repo: str, asof: str = typer.Option(..., help="As-of date YYYY-MM-DD")):
-    raise NotImplementedError("TODO: implement extract_history")
+    if result.unresolved_targets:
+        typer.echo("   Most common unresolved includes:")
+        top_unresolved = sorted(
+            result.unresolved_targets.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )[:10]
+
+        for name, count in top_unresolved:
+            typer.echo(f"   - {name} ({count})")
+
+
+    # Compute graph metrics (v1: includes-only)
+    df = compute_file_metrics(result.nodes, result.edges, cfg=GraphMetricsConfig(compute_betweenness=False))
+    write_metrics_csv(df, ap.metrics_csv)
+
+    typer.echo(f"✅ Wrote metrics: {ap.metrics_csv}")
+    typer.echo(f"   Top PageRank files:")
+    for row in df.sort_values("g_pagerank", ascending=False).head(5).itertuples(index=False):
+        typer.echo(f"   - {row.file}  (pagerank={row.g_pagerank:.6f})")
+
+
+@app.command("extract-history")
+def extract_history(
+    repo: str,
+    asof: str = typer.Option(..., help="As-of date YYYY-MM-DD"),
+    half_life_days: float = typer.Option(30.0, help="Half-life (days) for recency-weighted features"),
+):
+    """Extract git history features as of a date."""
+    repo_root = Path(repo).resolve()
+    if not repo_root.is_dir():
+        typer.echo(f"Error: repo path does not exist or is not a directory: {repo_root}")
+        raise typer.Exit(code=2)
+
+    ap = artifact_paths(Path.cwd())
+    if not ap.graph_json.exists():
+        typer.echo("Error: graph.json not found. Run `tensile build-graph <repo>` first.")
+        raise typer.Exit(code=2)
+
+    nodes, _, _ = read_graph_json(ap.graph_json)
+    df = extract_file_history(repo_root, nodes, asof=asof, cfg=GitHistoryConfig(half_life_days=half_life_days))
+
+    ap.history_csv.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(ap.history_csv, index=False)
+
+    typer.echo(f"✅ Wrote history: {ap.history_csv}")
+    typer.echo(f"   Rows: {len(df)}")
+
+    top = df.sort_values("h_recent_churn", ascending=False).head(5)
+    typer.echo("   Top recent-churn files:")
+    for r in top.itertuples(index=False):
+        typer.echo(f"   - {r.file} (recent_churn={r.h_recent_churn:.2f}, commits={r.h_commit_count})")
+
+# Stubs
 
 @app.command("build-features")
 def build_features(repo: str, asof: str = typer.Option(..., help="As-of date YYYY-MM-DD")):

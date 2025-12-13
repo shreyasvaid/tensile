@@ -23,10 +23,12 @@ DEFAULT_EXCLUDE_DIRS = {
 
 @dataclass
 class BuildGraphResult:
-    nodes: List[str]                 # repo-relative paths
-    edges: List[GraphEdge]           # include edges
-    unresolved_includes: Dict[str, int]  # file -> unresolved count
-    include_total: Dict[str, int]        # file -> include directives count
+    nodes: List[str]
+    edges: List[GraphEdge]
+    unresolved_includes: Dict[str, int]
+    include_total: Dict[str, int]
+    unresolved_targets: Dict[str, int]  # include token -> count
+
 
 def iter_c_files(repo_root: Path, exclude_dirs: Set[str]) -> Iterable[Path]:
     for p in repo_root.rglob("*"):
@@ -103,14 +105,17 @@ def build_includes_graph(
     Nodes: all .c/.h files under repo_root (minus excludes)
     Edges: A -> B if A includes B and B resolves to a repo file
     """
+    unresolved_targets: Dict[str, int] = {}
     repo_root = repo_root.resolve()
     exclude_dirs = exclude_dirs or set(DEFAULT_EXCLUDE_DIRS)
 
-    # Include dirs: repo root + (repo_root/include if exists) + any provided
     dirs: List[Path] = [repo_root]
-    include_dir_guess = repo_root / "include"
-    if include_dir_guess.exists() and include_dir_guess.is_dir():
-        dirs.append(include_dir_guess)
+
+    for guess in ["include", "src", "ext"]:
+        d = repo_root / guess
+        if d.exists() and d.is_dir():
+            dirs.append(d)
+
 
     if include_dirs:
         dirs.extend([d.resolve() for d in include_dirs])
@@ -155,6 +160,7 @@ def build_includes_graph(
             )
             if resolved is None:
                 unresolved_includes[rel] += 1
+                unresolved_targets[target] = unresolved_targets.get(target, 0) + 1
                 continue
             if resolved == rel:
                 continue
@@ -166,4 +172,6 @@ def build_includes_graph(
         edges=edges,
         unresolved_includes=unresolved_includes,
         include_total=include_total,
+        unresolved_targets=unresolved_targets,
     )
+

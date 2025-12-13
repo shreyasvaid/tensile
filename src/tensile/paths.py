@@ -15,5 +15,14 @@ class ArtifactPaths:
     def graph_json(self) -> Path:
         return self.cache_dir / "graph.json"
 
+    @property
+    def metrics_csv(self) -> Path:
+        return self.cache_dir / "metrics.csv"
+    
+    @property
+    def history_csv(self) -> Path:
+        return self.cache_dir / "history.csv"
+
+
 def artifact_paths(project_root: Path) -> ArtifactPaths:
     return ArtifactPaths(root=project_root.resolve())
