@@ -7,6 +7,9 @@ from tensile.graph.io import write_graph_json
 from tensile.graph.metrics import compute_file_metrics, write_metrics_csv, GraphMetricsConfig
 from tensile.graph.io import read_graph_json
 from tensile.history.git_mine import extract_file_history, GitHistoryConfig
+from tensile.features.code_stats import compute_code_stats
+from tensile.features.build_features import build_dataset
+
 
 
 
@@ -40,7 +43,7 @@ def build_graph(repo: str):
         meta=meta,
     )
 
-    typer.echo(f"✔ Wrote graph: {ap.graph_json}")
+    typer.echo(f"✅ Wrote graph: {ap.graph_json}")
     typer.echo(f"   Nodes: {meta['node_count']}, Edges: {meta['edge_count']}")
     typer.echo(
         f"   Includes: {meta['include_directives_total']}, Unresolved: {meta['unresolved_includes_total']}"
@@ -99,12 +102,51 @@ def extract_history(
     for r in top.itertuples(index=False):
         typer.echo(f"   - {r.file} (recent_churn={r.h_recent_churn:.2f}, commits={r.h_commit_count})")
 
-# Stubs
-
 @app.command("build-features")
 def build_features(repo: str, asof: str = typer.Option(..., help="As-of date YYYY-MM-DD")):
-    raise NotImplementedError("TODO: implement build_features")
+    """Build dataset by joining graph metrics, history, and code features."""
+    repo_root = Path(repo).resolve()
+    if not repo_root.is_dir():
+        typer.echo(f"Error: repo path does not exist or is not a directory: {repo_root}")
+        raise typer.Exit(code=2)
 
+    ap = artifact_paths(Path.cwd())
+
+    # Require upstream artifacts
+    missing = [p for p in [ap.graph_json, ap.metrics_csv, ap.history_csv] if not p.exists()]
+    if missing:
+        typer.echo("Error: missing required artifacts. Run these first:")
+        typer.echo("  tensile build-graph <repo>")
+        typer.echo("  tensile extract-history <repo> --asof YYYY-MM-DD")
+        raise typer.Exit(code=2)
+
+    # Compute code stats
+    nodes, _, _ = read_graph_json(ap.graph_json)
+    code_df = compute_code_stats(repo_root, nodes)
+    ap.code_stats_csv.parent.mkdir(parents=True, exist_ok=True)
+    code_df.to_csv(ap.code_stats_csv, index=False)
+    typer.echo(f"✅ Wrote code stats: {ap.code_stats_csv}")
+
+    # Join dataset
+    df = build_dataset(
+        repo_root=repo_root,
+        graph_json=ap.graph_json,
+        metrics_csv=ap.metrics_csv,
+        history_csv=ap.history_csv,
+        code_stats_csv=ap.code_stats_csv,
+    )
+    df.to_csv(ap.dataset_csv, index=False)
+    typer.echo(f"✅ Wrote dataset: {ap.dataset_csv} (rows={len(df)}, cols={len(df.columns)})")
+
+    # Quick peek
+    top = df.sort_values("h_recent_churn", ascending=False).head(5)
+    typer.echo("   Sample (top recent churn):")
+    for r in top.itertuples(index=False):
+        typer.echo(f"   - {r.file}")
+
+
+
+# Stubs
 @app.command()
 def train(repo: str, asof: str = typer.Option(..., help="As-of date YYYY-MM-DD")):
     raise NotImplementedError("TODO: implement train")

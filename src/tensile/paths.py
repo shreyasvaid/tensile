@@ -22,6 +22,15 @@ class ArtifactPaths:
     @property
     def history_csv(self) -> Path:
         return self.cache_dir / "history.csv"
+    
+    @property
+    def code_stats_csv(self) -> Path:
+        return self.cache_dir / "code_stats.csv"
+
+    @property
+    def dataset_csv(self) -> Path:
+        return self.cache_dir / "dataset.csv"
+
 
 
 def artifact_paths(project_root: Path) -> ArtifactPaths:
