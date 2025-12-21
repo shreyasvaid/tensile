@@ -6,6 +6,7 @@ import pandas as pd
 
 from tensile.graph.io import read_graph_json
 
+
 def build_dataset(
     repo_root: Path,
     graph_json: Path,

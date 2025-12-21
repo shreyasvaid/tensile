@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from tensile.graph.io import GraphEdge
 
@@ -21,16 +21,17 @@ DEFAULT_EXCLUDE_DIRS = {
     "tests",
 }
 
+
 @dataclass
 class BuildGraphResult:
-    nodes: List[str]
-    edges: List[GraphEdge]
-    unresolved_includes: Dict[str, int]
-    include_total: Dict[str, int]
-    unresolved_targets: Dict[str, int]  # include token -> count
+    nodes: list[str]
+    edges: list[GraphEdge]
+    unresolved_includes: dict[str, int]
+    include_total: dict[str, int]
+    unresolved_targets: dict[str, int]  # include token -> count
 
 
-def iter_c_files(repo_root: Path, exclude_dirs: Set[str]) -> Iterable[Path]:
+def iter_c_files(repo_root: Path, exclude_dirs: set[str]) -> Iterable[Path]:
     for p in repo_root.rglob("*"):
         if not p.is_file():
             continue
@@ -41,26 +42,29 @@ def iter_c_files(repo_root: Path, exclude_dirs: Set[str]) -> Iterable[Path]:
             continue
         yield p
 
+
 def repo_rel(repo_root: Path, path: Path) -> str:
     return path.resolve().relative_to(repo_root.resolve()).as_posix()
 
-def build_repo_file_index(repo_root: Path, exclude_dirs: Set[str]) -> Dict[str, Path]:
+
+def build_repo_file_index(repo_root: Path, exclude_dirs: set[str]) -> dict[str, Path]:
     """
     Maps repo-relative paths (posix) -> absolute Path.
     """
-    idx: Dict[str, Path] = {}
+    idx: dict[str, Path] = {}
     for f in iter_c_files(repo_root, exclude_dirs):
         idx[repo_rel(repo_root, f)] = f
     return idx
+
 
 def resolve_include(
     including_file: Path,
     repo_root: Path,
     include_token: str,
     kind: str,
-    include_dirs: List[Path],
-    repo_index: Dict[str, Path],
-) -> Optional[str]:
+    include_dirs: list[Path],
+    repo_index: dict[str, Path],
+) -> str | None:
     """
     Returns repo-relative path of resolved include target if it exists inside repo,
     else None.
@@ -72,7 +76,7 @@ def resolve_include(
     """
     token = include_token.strip()
 
-    candidates: List[Path] = []
+    candidates: list[Path] = []
 
     if kind == '"':
         candidates.append((including_file.parent / token).resolve())
@@ -94,10 +98,11 @@ def resolve_include(
             return rel
     return None
 
+
 def build_includes_graph(
     repo_root: Path,
-    include_dirs: Optional[List[Path]] = None,
-    exclude_dirs: Optional[Set[str]] = None,
+    include_dirs: list[Path] | None = None,
+    exclude_dirs: set[str] | None = None,
 ) -> BuildGraphResult:
     """
     Build file-level dependency graph using #include relations.
@@ -105,24 +110,23 @@ def build_includes_graph(
     Nodes: all .c/.h files under repo_root (minus excludes)
     Edges: A -> B if A includes B and B resolves to a repo file
     """
-    unresolved_targets: Dict[str, int] = {}
+    unresolved_targets: dict[str, int] = {}
     repo_root = repo_root.resolve()
     exclude_dirs = exclude_dirs or set(DEFAULT_EXCLUDE_DIRS)
 
-    dirs: List[Path] = [repo_root]
+    dirs: list[Path] = [repo_root]
 
     for guess in ["include", "src", "ext"]:
         d = repo_root / guess
         if d.exists() and d.is_dir():
             dirs.append(d)
 
-
     if include_dirs:
         dirs.extend([d.resolve() for d in include_dirs])
 
     # De-duplicate while preserving order
     seen = set()
-    include_dirs_final: List[Path] = []
+    include_dirs_final: list[Path] = []
     for d in dirs:
         if d not in seen:
             include_dirs_final.append(d)
@@ -131,9 +135,9 @@ def build_includes_graph(
     repo_index = build_repo_file_index(repo_root, exclude_dirs)
     nodes = list(repo_index.keys())
 
-    edges: List[GraphEdge] = []
-    unresolved_includes: Dict[str, int] = {n: 0 for n in nodes}
-    include_total: Dict[str, int] = {n: 0 for n in nodes}
+    edges: list[GraphEdge] = []
+    unresolved_includes: dict[str, int] = {n: 0 for n in nodes}
+    include_total: dict[str, int] = {n: 0 for n in nodes}
 
     for rel, abs_path in repo_index.items():
         try:
@@ -174,4 +178,3 @@ def build_includes_graph(
         include_total=include_total,
         unresolved_targets=unresolved_targets,
     )
-

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import pandas as pd
 
@@ -15,11 +14,14 @@ RE_GOTO = re.compile(r"\bgoto\b")
 RE_EXTERN = re.compile(r"\bextern\b")
 RE_STATIC = re.compile(r"\bstatic\b")
 
+
 def _count_substring(s: str, sub: str) -> int:
     return s.count(sub)
 
+
 def _nonempty_lines(text: str) -> int:
     return sum(1 for line in text.splitlines() if line.strip())
+
 
 def compute_code_stats(repo_root: Path, files: Iterable[str]) -> pd.DataFrame:
     """

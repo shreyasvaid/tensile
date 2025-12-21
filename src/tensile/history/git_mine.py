@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
 
 import pandas as pd
 
@@ -17,8 +17,7 @@ class GitHistoryConfig:
 def _run_git(repo_root: Path, args: list[str]) -> str:
     proc = subprocess.run(
         ["git", "-C", str(repo_root)] + args,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     if proc.returncode != 0:
@@ -40,7 +39,7 @@ def extract_file_history(
     repo_root: Path,
     files: Iterable[str],
     asof: str,
-    cfg: GitHistoryConfig = GitHistoryConfig(),
+    cfg: GitHistoryConfig | None = None,
 ) -> pd.DataFrame:
     """
     Per-file git history features up to and including `asof` (YYYY-MM-DD).
@@ -57,6 +56,7 @@ def extract_file_history(
       h_recent_churn
       h_recent_commits
     """
+    cfg = GitHistoryConfig()
     repo_root = repo_root.resolve()
     T = _parse_asof(asof)
 

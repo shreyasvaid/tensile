@@ -2,31 +2,31 @@ from __future__ import annotations
 
 import re
 import subprocess
-from dataclasses import dataclass
+from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Iterable, Set
 
 import pandas as pd
-
 
 DEFAULT_BUGFIX_RE = re.compile(
     r"(?i)\b(fix|bug|crash|segfault|overflow|leak|regression|uaf|use-after-free|null)\b"
 )
 
+
 def _run_git(repo_root: Path, args: list[str]) -> str:
     proc = subprocess.run(
         ["git", "-C", str(repo_root)] + args,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or "git command failed")
     return proc.stdout
 
+
 def _parse_day(s: str) -> datetime:
     return datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
 
 def build_bugfix_labels(
     repo_root: Path,
@@ -65,7 +65,7 @@ def build_bugfix_labels(
             if bugfix_regex.search(subject or ""):
                 bugfix_shas.append(sha)
 
-    touched: Set[str] = set()
+    touched: set[str] = set()
     # For each bugfix commit, list touched files
     for sha in bugfix_shas:
         try:
@@ -78,7 +78,6 @@ def build_bugfix_labels(
                 continue
             touched.add(p)
 
-    files_set = set(files)
     rows = []
     for f in files:
         rows.append({"file": f, "y_bugfix_next": 1 if f in touched else 0})

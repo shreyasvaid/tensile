@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
 
 import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
 
-from tensile.risk.train import load_model, LABEL_COL, ID_COL
+from tensile.risk.train import LABEL_COL, load_model
 
 
 def precision_at_k(y_true: np.ndarray, scores: np.ndarray, k: int) -> float:
@@ -21,8 +19,10 @@ def evaluate(
     dataset_labeled_csv: Path,
     model_path: Path,
     out_json: Path,
-    ks: List[int] = [10, 20, 50],
-) -> Dict:
+    ks: list[int] | None = None,
+) -> dict:
+    if ks is None:
+        ks = [10, 20, 50]
     df = pd.read_csv(dataset_labeled_csv)
     y = df[LABEL_COL].astype(int).to_numpy()
 
@@ -32,9 +32,9 @@ def evaluate(
 
     # Baselines
     baselines = {
-        "recent_churn": df.get("h_recent_churn", pd.Series([0]*len(df))).astype(float).to_numpy(),
-        "pagerank": df.get("g_pagerank", pd.Series([0]*len(df))).astype(float).to_numpy(),
-        "loc": df.get("c_loc", pd.Series([0]*len(df))).astype(float).to_numpy(),
+        "recent_churn": df.get("h_recent_churn", pd.Series([0] * len(df))).astype(float).to_numpy(),
+        "pagerank": df.get("g_pagerank", pd.Series([0] * len(df))).astype(float).to_numpy(),
+        "loc": df.get("c_loc", pd.Series([0] * len(df))).astype(float).to_numpy(),
     }
 
     results = {

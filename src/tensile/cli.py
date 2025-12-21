@@ -1,25 +1,25 @@
-import typer
+import json
 from pathlib import Path
 
-from tensile.paths import artifact_paths
-from tensile.graph.build_includes import build_includes_graph
-from tensile.graph.io import write_graph_json
-from tensile.graph.metrics import compute_file_metrics, write_metrics_csv, GraphMetricsConfig
-from tensile.graph.io import read_graph_json
-from tensile.history.git_mine import extract_file_history, GitHistoryConfig
-from tensile.features.code_stats import compute_code_stats
-from tensile.features.build_features import build_dataset
-from tensile.history.labels import build_bugfix_labels
-from tensile.risk.train import train_logreg, save_model
-from tensile.risk.evaluate import evaluate
-from tensile.risk.report import rank_files
-from tensile.risk.explain import explain_file
-from tensile.risk.report_md import write_report_md
-import json
-
 import pandas as pd
+import typer
+
+from tensile.features.build_features import build_dataset
+from tensile.features.code_stats import compute_code_stats
+from tensile.graph.build_includes import build_includes_graph
+from tensile.graph.io import read_graph_json, write_graph_json
+from tensile.graph.metrics import GraphMetricsConfig, compute_file_metrics, write_metrics_csv
+from tensile.history.git_mine import GitHistoryConfig, extract_file_history
+from tensile.history.labels import build_bugfix_labels
+from tensile.paths import artifact_paths
+from tensile.risk.evaluate import evaluate
+from tensile.risk.explain import explain_file
+from tensile.risk.report import rank_files
+from tensile.risk.report_md import write_report_md
+from tensile.risk.train import save_model, train_logreg
 
 app = typer.Typer(help="TENSILE: Graph-based risk analysis for large C codebases")
+
 
 @app.command("build-graph")
 def build_graph(repo: str):
@@ -28,7 +28,6 @@ def build_graph(repo: str):
     if not repo_root.is_dir():
         typer.echo(f"Error: repo path does not exist or is not a directory: {repo_root}")
         raise typer.Exit(code=2)
-
 
     ap = artifact_paths(Path.cwd())  # project root is current working dir (tensile repo)
     result = build_includes_graph(repo_root)
@@ -58,23 +57,23 @@ def build_graph(repo: str):
     if result.unresolved_targets:
         typer.echo("   Most common unresolved includes:")
         top_unresolved = sorted(
-            result.unresolved_targets.items(),
-            key=lambda x: x[1],
-            reverse=True
+            result.unresolved_targets.items(), key=lambda x: x[1], reverse=True
         )[:10]
 
         for name, count in top_unresolved:
             typer.echo(f"   - {name} ({count})")
 
-
     # Compute graph metrics (v1: includes-only)
-    df = compute_file_metrics(result.nodes, result.edges, cfg=GraphMetricsConfig(compute_betweenness=False))
+    df = compute_file_metrics(
+        result.nodes, result.edges, cfg=GraphMetricsConfig(compute_betweenness=False)
+    )
     write_metrics_csv(df, ap.metrics_csv)
 
     typer.echo(f"✅ Wrote metrics: {ap.metrics_csv}")
-    typer.echo(f"   Top PageRank files:")
+    typer.echo("   Top PageRank files:")
     for row in df.sort_values("g_pagerank", ascending=False).head(5).itertuples(index=False):
         typer.echo(f"   - {row.file}  (pagerank={row.g_pagerank:.6f})")
+
 
 def _run_extract_history(repo_root: Path, asof: str, half_life_days: float) -> None:
     ap = artifact_paths(Path.cwd())
@@ -163,6 +162,7 @@ def build_features(repo: str, asof: str = typer.Option(..., help="As-of date YYY
     for r in top.itertuples(index=False):
         typer.echo(f"   - {r.file}")
 
+
 @app.command("label")
 def label(
     repo: str,
@@ -190,13 +190,16 @@ def label(
     typer.echo(f"✅ Wrote labels: {ap.labels_csv}")
     typer.echo(f"   Positive rate: {rate:.3f} ({int(df['y_bugfix_next'].sum())}/{len(df)})")
 
+
 @app.command("join-labels")
 def join_labels():
     """Join labels into dataset.csv -> dataset_labeled.csv."""
     ap = artifact_paths(Path.cwd())
 
     if not ap.dataset_csv.exists():
-        typer.echo("Error: dataset.csv not found. Run `tensile build-features <repo> --asof ...` first.")
+        typer.echo(
+            "Error: dataset.csv not found. Run `tensile build-features <repo> --asof ...` first."
+        )
         raise typer.Exit(code=2)
 
     if not ap.labels_csv.exists():
@@ -214,6 +217,7 @@ def join_labels():
         f"✅ Wrote labeled dataset: {ap.dataset_labeled_csv} (rows={len(out)}, cols={len(out.columns)})"
     )
 
+
 @app.command()
 def train():
     """Train a baseline risk model on dataset_labeled.csv."""
@@ -226,6 +230,7 @@ def train():
     save_model(ap.model_path, tr.model, tr.feature_cols)
     typer.echo(f"✅ Saved model: {ap.model_path}")
     typer.echo(f"   Features: {len(tr.feature_cols)}")
+
 
 @app.command()
 def evaluate_model():
@@ -266,6 +271,7 @@ def explain(file: str, topn: int = typer.Option(8, help="Number of contributing 
     for f, v in ex.top_negative:
         typer.echo(f"  - {f}: {v:.4f}")
 
+
 @app.command()
 def report(
     top: int = typer.Option(20, help="Show top K risky files"),
@@ -273,7 +279,9 @@ def report(
     repo: str = typer.Option("", help="Repository path (optional)"),
     asof: str = typer.Option("", help="As-of date YYYY-MM-DD (optional)"),
     horizon_days: int = typer.Option(0, help="Prediction horizon in days (optional)"),
-    quiet: bool = typer.Option(False, help="Suppress printing the ranked list (still writes report.md)"),
+    quiet: bool = typer.Option(
+        False, help="Suppress printing the ranked list (still writes report.md)"
+    ),
 ):
     """Print top risky files and optionally write report.md."""
     ap = artifact_paths(Path.cwd())
@@ -305,9 +313,7 @@ def report(
 
     if not quiet:
         for i, r in enumerate(ranked.itertuples(index=False), start=1):
-            typer.echo(
-                f"{i:>2}. {r.file}  score={r.risk_score:.4f}  label={int(r.y_bugfix_next)}"
-            )
+            typer.echo(f"{i:>2}. {r.file}  score={r.risk_score:.4f}  label={int(r.y_bugfix_next)}")
 
     if out_md:
         meta = {
@@ -392,7 +398,6 @@ def analyze(
         encoding="utf-8",
     )
 
-
     # 7) Report
     report(
         top=top,
@@ -402,6 +407,7 @@ def analyze(
         horizon_days=horizon_days,
         quiet=True,
     )
+
 
 if __name__ == "__main__":
     app()

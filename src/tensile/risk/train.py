@@ -2,15 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Tuple
 
 import joblib
-import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-
+from sklearn.preprocessing import StandardScaler
 
 LABEL_COL = "y_bugfix_next"
 ID_COL = "file"
@@ -18,10 +15,12 @@ ID_COL = "file"
 # Columns we do NOT train on
 DROP_COLS = {ID_COL, LABEL_COL}
 
+
 @dataclass(frozen=True)
 class TrainResult:
     model: Pipeline
-    feature_cols: List[str]
+    feature_cols: list[str]
+
 
 def train_logreg(dataset_labeled_csv: Path) -> TrainResult:
     df = pd.read_csv(dataset_labeled_csv)
@@ -40,9 +39,11 @@ def train_logreg(dataset_labeled_csv: Path) -> TrainResult:
     model.fit(X, y)
     return TrainResult(model=model, feature_cols=feature_cols)
 
-def save_model(out_path: Path, model: Pipeline, feature_cols: List[str]) -> None:
+
+def save_model(out_path: Path, model: Pipeline, feature_cols: list[str]) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump({"model": model, "feature_cols": feature_cols}, out_path)
+
 
 def load_model(path: Path):
     obj = joblib.load(path)

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
 
 import pandas as pd
 
-from tensile.risk.train import load_model, LABEL_COL, ID_COL
+from tensile.risk.train import ID_COL, LABEL_COL, load_model
+
 
 def rank_files(dataset_labeled_csv: Path, model_path: Path) -> pd.DataFrame:
     df = pd.read_csv(dataset_labeled_csv)

@@ -2,19 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Tuple
 
-import numpy as np
 import pandas as pd
 
-from tensile.risk.train import load_model, ID_COL
+from tensile.risk.train import ID_COL, load_model
+
 
 @dataclass(frozen=True)
 class Explanation:
     file: str
     score: float
-    top_positive: List[Tuple[str, float]]
-    top_negative: List[Tuple[str, float]]
+    top_positive: list[tuple[str, float]]
+    top_negative: list[tuple[str, float]]
+
 
 def explain_file(
     dataset_labeled_csv: Path,
@@ -43,7 +43,7 @@ def explain_file(
     z = scaler.transform(x).reshape(-1)
     contrib = coefs * z
 
-    pairs = list(zip(feat_cols, contrib))
+    pairs = list(zip(feat_cols, contrib, strict=False))
     pairs_sorted = sorted(pairs, key=lambda t: t[1], reverse=True)
 
     top_pos = [(f, float(v)) for f, v in pairs_sorted[:topn]]

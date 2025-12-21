@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
+
 def write_report_md(
     out_path: Path,
     ranked: pd.DataFrame,
@@ -25,9 +26,13 @@ def write_report_md(
     lines.append(f"- As-of: `{meta.get('asof', '')}`\n")
     lines.append(f"- Horizon (days): `{meta.get('horizon_days', '')}`\n")
     lines.append(f"- Files analyzed: **{meta.get('n_files', '')}**\n")
-    lines.append(f"- Positive rate: **{meta.get('positive_rate', 0):.3f}** ({meta.get('n_pos', '')}/{meta.get('n_files', '')})\n")
+    lines.append(
+        f"- Positive rate: **{meta.get('positive_rate', 0):.3f}** ({meta.get('n_pos', '')}/{meta.get('n_files', '')})\n"
+    )
     lines.append(f"- Top-K: **{top}**\n")
-    lines.append(f"- Hit rate in top {top}: **{meta.get('hits', '')}/{top} = {meta.get('hit_rate', 0):.2f}**\n")
+    lines.append(
+        f"- Hit rate in top {top}: **{meta.get('hits', '')}/{top} = {meta.get('hit_rate', 0):.2f}**\n"
+    )
     lines.append(f"- Lift vs base rate: **{meta.get('lift', 0):.1f}×**\n")
 
     if eval_data:

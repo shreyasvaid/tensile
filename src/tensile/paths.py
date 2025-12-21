@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+
 @dataclass(frozen=True)
 class ArtifactPaths:
     root: Path
@@ -18,11 +19,11 @@ class ArtifactPaths:
     @property
     def metrics_csv(self) -> Path:
         return self.cache_dir / "metrics.csv"
-    
+
     @property
     def history_csv(self) -> Path:
         return self.cache_dir / "history.csv"
-    
+
     @property
     def code_stats_csv(self) -> Path:
         return self.cache_dir / "code_stats.csv"
@@ -30,7 +31,7 @@ class ArtifactPaths:
     @property
     def dataset_csv(self) -> Path:
         return self.cache_dir / "dataset.csv"
-    
+
     @property
     def labels_csv(self) -> Path:
         return self.cache_dir / "labels.csv"
@@ -38,7 +39,7 @@ class ArtifactPaths:
     @property
     def dataset_labeled_csv(self) -> Path:
         return self.cache_dir / "dataset_labeled.csv"
-    
+
     @property
     def model_path(self) -> Path:
         return self.cache_dir / "model.joblib"
@@ -46,19 +47,14 @@ class ArtifactPaths:
     @property
     def eval_json(self) -> Path:
         return self.cache_dir / "eval.json"
-    
+
     @property
     def report_md(self) -> Path:
         return self.cache_dir / "report.md"
-    
+
     @property
     def run_meta_json(self) -> Path:
         return self.cache_dir / "run_meta.json"
-
-
-
-
-
 
 
 def artifact_paths(project_root: Path) -> ArtifactPaths:
