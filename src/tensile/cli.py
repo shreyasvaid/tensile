@@ -48,7 +48,7 @@ def build_graph(repo: str):
         meta=meta,
     )
 
-    typer.echo(f"✅ Wrote graph: {ap.graph_json}")
+    typer.echo(f"Wrote graph: {ap.graph_json}")
     typer.echo(f"   Nodes: {meta['node_count']}, Edges: {meta['edge_count']}")
     typer.echo(
         f"   Includes: {meta['include_directives_total']}, Unresolved: {meta['unresolved_includes_total']}"
@@ -69,7 +69,7 @@ def build_graph(repo: str):
     )
     write_metrics_csv(df, ap.metrics_csv)
 
-    typer.echo(f"✅ Wrote metrics: {ap.metrics_csv}")
+    typer.echo(f"Wrote metrics: {ap.metrics_csv}")
     typer.echo("   Top PageRank files:")
     for row in df.sort_values("g_pagerank", ascending=False).head(5).itertuples(index=False):
         typer.echo(f"   - {row.file}  (pagerank={row.g_pagerank:.6f})")
@@ -92,7 +92,7 @@ def _run_extract_history(repo_root: Path, asof: str, half_life_days: float) -> N
     ap.history_csv.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(ap.history_csv, index=False)
 
-    typer.echo(f"✅ Wrote history: {ap.history_csv}")
+    typer.echo(f"Wrote history: {ap.history_csv}")
     typer.echo(f"   Rows: {len(df)}")
 
     top = df.sort_values("h_recent_churn", ascending=False).head(5)
@@ -143,7 +143,7 @@ def build_features(repo: str, asof: str = typer.Option(..., help="As-of date YYY
     code_df = compute_code_stats(repo_root, nodes)
     ap.code_stats_csv.parent.mkdir(parents=True, exist_ok=True)
     code_df.to_csv(ap.code_stats_csv, index=False)
-    typer.echo(f"✅ Wrote code stats: {ap.code_stats_csv}")
+    typer.echo(f"Wrote code stats: {ap.code_stats_csv}")
 
     # Join dataset
     df = build_dataset(
@@ -154,7 +154,7 @@ def build_features(repo: str, asof: str = typer.Option(..., help="As-of date YYY
         code_stats_csv=ap.code_stats_csv,
     )
     df.to_csv(ap.dataset_csv, index=False)
-    typer.echo(f"✅ Wrote dataset: {ap.dataset_csv} (rows={len(df)}, cols={len(df.columns)})")
+    typer.echo(f"Wrote dataset: {ap.dataset_csv} (rows={len(df)}, cols={len(df.columns)})")
 
     # Quick peek
     top = df.sort_values("h_recent_churn", ascending=False).head(5)
@@ -187,7 +187,7 @@ def label(
     df.to_csv(ap.labels_csv, index=False)
 
     rate = df["y_bugfix_next"].mean() if len(df) else 0.0
-    typer.echo(f"✅ Wrote labels: {ap.labels_csv}")
+    typer.echo(f"Wrote labels: {ap.labels_csv}")
     typer.echo(f"   Positive rate: {rate:.3f} ({int(df['y_bugfix_next'].sum())}/{len(df)})")
 
 
@@ -214,7 +214,7 @@ def join_labels():
 
     out.to_csv(ap.dataset_labeled_csv, index=False)
     typer.echo(
-        f"✅ Wrote labeled dataset: {ap.dataset_labeled_csv} (rows={len(out)}, cols={len(out.columns)})"
+        f"Wrote labeled dataset: {ap.dataset_labeled_csv} (rows={len(out)}, cols={len(out.columns)})"
     )
 
 
@@ -228,7 +228,7 @@ def train():
 
     tr = train_logreg(ap.dataset_labeled_csv)
     save_model(ap.model_path, tr.model, tr.feature_cols)
-    typer.echo(f"✅ Saved model: {ap.model_path}")
+    typer.echo(f"Saved model: {ap.model_path}")
     typer.echo(f"   Features: {len(tr.feature_cols)}")
 
 
@@ -241,7 +241,7 @@ def evaluate_model():
         raise typer.Exit(code=2)
 
     res = evaluate(ap.dataset_labeled_csv, ap.model_path, ap.eval_json)
-    typer.echo(f"✅ Wrote eval: {ap.eval_json}")
+    typer.echo(f"Wrote eval: {ap.eval_json}")
     typer.echo("   Precision@K (model):")
     for k, v in res["model"]["precision_at_k"].items():
         typer.echo(f"   - P@{k}: {v:.3f}")
