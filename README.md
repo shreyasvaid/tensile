@@ -186,7 +186,7 @@ However, labels are heuristic, performance varies by time window, and as such, r
 
 The tool is intended for prioritization, not blame.
 
-## Disclaimer [VERY IMPORTANT] 
+## Disclaimer
 
 TENSILE provides probabilistic risk signals.
 It does not guarantee bugs, defects, or security issues.
